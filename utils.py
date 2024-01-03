@@ -1,4 +1,5 @@
 from conllu import parse
+import re
 
 def read_cupt(path):
     """
@@ -22,3 +23,8 @@ def read_cupt(path):
         sentences = parse(data)
     
     return sentences
+
+def extract_numbers(sentence):
+    # Use regular expression to find all numbers in the sentence
+    numbers = re.findall(r'\d+', sentence)
+    return numbers
