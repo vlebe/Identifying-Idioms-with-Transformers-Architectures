@@ -41,10 +41,10 @@ def create_bigo_csv(sentences, csv_file_name) :
 
         data_structure['token_list'].append(token_list)
         data_structure['lemmas'].append(lemmas)
-        data_structure['labels'].append(labels)
+        data_structure['labels'].append(list(labels))
     
     df = pd.DataFrame(data_structure)
-    df.to_csv(csv_file_name, index=False)
+    df.to_csv(csv_file_name, index=False, sep="\t")
 
 def create_igo_csv(sentences, csv_file_name) :
     data_structure = {
@@ -85,10 +85,10 @@ def create_igo_csv(sentences, csv_file_name) :
 
         data_structure['token_list'].append(token_list)
         data_structure['lemmas'].append(lemmas)
-        data_structure['labels'].append(labels)
+        data_structure['labels'].append(list(labels))
     
     df = pd.DataFrame(data_structure)
-    df.to_csv(csv_file_name, index=False)
+    df.to_csv(csv_file_name, index=False, sep='\t')
 
 if __name__ == "__main__" :
     train_sentences = read_cupt("Dataset/FR/train.cupt")
