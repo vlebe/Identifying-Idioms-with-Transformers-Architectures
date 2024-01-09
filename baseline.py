@@ -1,47 +1,40 @@
 ### Create baseline for the project
-import json
-from utils import read_cupt
+import re
 import numpy as np
+from utils import read_cupt
 
-def model(train_sentences):
-    baseline = {}
+from conllu.models import SentenceList
 
-    for i, sentence in enumerate(train_sentences):
-        baseline[i] = []
+pattern = r"\d:[A-Za-z]{3}"
 
-        for j, token in enumerate(sentence):
-            if token["parseme:mwe"] != "*" and any((j != k) & (sentence[k]["parseme:mwe"] != "*") for k in range(max(0, j-2), min(len(sentence), j+3))):
-                baseline[i].append((token["lemma"], j))
-
-    sentences = [value for value in baseline.values() if value]
+def model(list_sentences : SentenceList):
+    list_mwe = []
     
-    final_list = []
-    
-    for sentence in sentences:
-        i = 0
-        while i < len(sentence):
-            index = sentence[i][1]
-            exp = [sentence[i][0]]
-            i += 1
-            for w2 in sentence[i:]:
-                if w2[1] <= index + 2:
-                    exp.append(w2[0])
-                    index = w2[1]
-                    i += 1
-                else:
-                    break
-            if exp not in final_list :
-                final_list.append(exp)
+    for _, sentence in enumerate(list_sentences): 
+        current_mwes = {}
+        for token in sentence:
+            id_mwe = token["parseme:mwe"]
+            if id_mwe == "*": 
+                continue
+            elif re.match(pattern, id_mwe): 
+                current_mwes[id_mwe[0]] = [token["form"]]
+            elif id_mwe in current_mwes.keys():
+                current_mwes[id_mwe].append(token["form"])
+        if current_mwes != {}:
+            list_mwe.append(list(current_mwes.values())[0])
 
-    return final_list
+    while [] in list_mwe:
+        list_mwe.remove([])
 
-def evaluate_baseline(test, train) :
+    return list_mwe
+
+def evaluate_baseline(expression_test : list, expression_train : list) :
     score = 0 
-    for exp in test :
-        if exp in train :
+    for expression in expression_test :
+        if expression in expression_train :
             score += 1
     
-    return score / len(test)
+    return score / len(expression_test)
 
 if __name__ == "__main__" :
     train_sentences = read_cupt("Dataset/FR/train.cupt")

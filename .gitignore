@@ -1,3 +1,5 @@
 __pycache__/
 Dataset/
 venv/
+pstalnvenv/
+test_data.ipynb
