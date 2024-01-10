@@ -129,8 +129,8 @@ if __name__ == '__main__' :
     tokenizer = CamembertTokenizer.from_pretrained('camembert-base')
     camembert_model = CamembertModel.from_pretrained('camembert-base')
 
-    learning_rate = 5e-5
-    epochs = 1
+    learning_rate = 1e-4
+    epochs = 30
     batch_size = 16
 
     print("Loading datasets...")
@@ -145,15 +145,16 @@ if __name__ == '__main__' :
 
     model = CamembertMWE(4, camembert_model, device)
 
+    # Freeze Camembert parameters
     for param in model.bert.base_model.parameters():
         param.requires_grad = False
 
     model.to(device)
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
-    loss = CrossEntropyLoss(reduction='none')
+    loss = CrossEntropyLoss(reduction='none', weight=torch.tensor([3.2, 98.9, 98.6, 99.2]))
 
-    train_losses, val_losses = train(model, val_loader, val_loader, optimizer, loss, epochs, device)
+    train_losses, val_losses = train(model, train_loader, val_loader, optimizer, loss, epochs, device)
 
     f1_scores = evaluate(model, test_loader, device)
     
