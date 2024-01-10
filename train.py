@@ -1,54 +1,167 @@
 import torch
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
-from dataset2 import MWEDataset
-from transformer import DistilBertForMWE
-from transformers import DistilBertTokenizer, DistilBertModel
-from dataset2 import collate_batch
+from dataset import MWEDataset
+from transformer import CamembertMWE
+from transformers import CamembertTokenizer, CamembertModel
+from torch.nn import CrossEntropyLoss
+from tqdm import tqdm
+from sklearn.metrics import f1_score
+import matplotlib.pyplot as plt
+import numpy as np
 
-tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
-distilbert_model = DistilBertModel.from_pretrained('distilbert-base-uncased')
+def train(model, train_loader, val_loader, optimizer, loss, epochs, device):
+    train_losses = []
+    val_losses = []
 
-learning_rate = 5e-5
-epochs = 3
-batch_size = 32
+    print("Training...")
+    for epoch in range(epochs):
+        model.train()
+        total_loss = 0
+        for batch in tqdm(train_loader):
+            input_ids, attention_mask, labels = batch
+            input_ids = input_ids.to(device)
+            attention_mask = attention_mask.to(device)
+            labels = labels.to(device)
 
+            # Reset gradients
+            optimizer.zero_grad()
 
-train_dataset = MWEDataset("/Users/meliya/Desktop/PSTALN/projet/PSTALN/test_IGO.csv", tokenizer)
-train_loader = DataLoader(train_dataset, batch_size=batch_size, collate_fn=collate_batch)
+            # Forward pass
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+            batch_loss = 0
+            for i in range(outputs.shape[0]):
+                mask = (labels[i] != -100).float().to(device)
+                batch_loss += (loss(outputs[i], labels[i]) * mask).mean()
 
+            batch_loss /= outputs.shape[0]
 
-model = DistilBertForMWE(num_labels=2)
-model.train()
+            total_loss += batch_loss.item()
 
+            # Backward pass and optimization
+            batch_loss.backward()
+            optimizer.step()
+        
+        total_loss /= len(train_loader)
 
-optimizer = AdamW(model.parameters(), lr=learning_rate)
+        model.eval()
+        with torch.no_grad():
+            total_val_loss = 0
+            y_true = []
+            y_pred = []
+            for batch in val_loader :
+                input_ids, attention_mask, labels = batch
+                input_ids = input_ids.to(device)
+                attention_mask = attention_mask.to(device)
+                labels = labels.to(device)
 
+                # Forward pass
+                outputs = model(input_ids=input_ids, attention_mask=attention_mask)
 
-for epoch in range(epochs):
-    total_loss = 0
-    for batch in train_loader:
-        input_ids, attention_mask, labels = batch
+                _, predicted = torch.max(outputs, dim=2)
+                y_true.extend(labels.tolist())
+                y_pred.extend(predicted.tolist())
 
-        # Afficher les dimensions des tenseurs d'entrée
-        print(f"Taille des input_ids: {input_ids.size()}")
-        print(f"Taille des attention_mask: {attention_mask.size()}")
+                batch_loss = 0
+                for i in range(outputs.shape[0]):
+                    mask = (labels[i] != -100).float().to(device)
+                    batch_loss += (loss(outputs[i], labels[i]) * mask).mean()
 
-        # Remise à zéro des gradients
-        optimizer.zero_grad()
+                batch_loss /= outputs.shape[0]
 
-        # Propagation avant
-        outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-        loss = outputs.loss
+                total_val_loss += batch_loss.item()
+        total_val_loss /= len(val_loader)
 
-        # Propagation arrière et optimisation
-        loss.backward()
-        optimizer.step()
+        y_true = np.array(y_true).flatten()
+        y_pred = np.array(y_pred).flatten()
 
-        total_loss += loss.item()
+        f1_scores = calculate_scores_by_class(y_true, y_pred)
 
-    print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss / len(train_loader)}")
+        print(f"Epoch {epoch+1}/{epochs}, Train Loss: {total_loss}, Val Loss: {total_val_loss}")
+        train_losses.append(total_loss)
+        val_losses.append(total_val_loss)
 
+        print("Val scores : ", f1_scores)
 
-# Sauvegarde du modèle
-torch.save(model.state_dict(), "distilbert_mwe.pth")
+    torch.save(model.state_dict(), "camembert_mwe.pth")
+    return train_losses, val_losses
+
+def calculate_scores_by_class(y_true, y_pred):
+    # Filter out cases where y_true is -100
+    valid_indices = [i for i, label in enumerate(y_true) if label != -100]
+    y_true_valid = np.array([y_true[i] for i in valid_indices])
+    y_pred_valid = np.array([y_pred[i] for i in valid_indices])
+
+    # Calculate F1 score by class
+    f1_scores = f1_score(y_true_valid, y_pred_valid, average=None, labels=np.unique(y_true_valid))
+
+    return f1_scores
+
+def evaluate(model, data_loader, device):
+    model.eval()
+    y_true = []
+    y_pred = []
+
+    with torch.no_grad():
+        for batch in data_loader:
+            input_ids, attention_mask, labels = batch
+            input_ids = input_ids.to(device)
+            attention_mask = attention_mask.to(device)
+            labels = labels.to(device)
+
+            # Forward pass
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+            _, predicted = torch.max(outputs, dim=2)
+
+            y_true.extend(labels.tolist())
+            y_pred.extend(predicted.tolist())
+
+    y_true = np.array(y_true).flatten()
+    y_pred = np.array(y_pred).flatten()
+
+    f1_scores = calculate_scores_by_class(y_true, y_pred)
+
+    return f1_scores
+
+if __name__ == '__main__' :
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    tokenizer = CamembertTokenizer.from_pretrained('camembert-base')
+    camembert_model = CamembertModel.from_pretrained('camembert-base')
+
+    learning_rate = 5e-5
+    epochs = 1
+    batch_size = 16
+
+    print("Loading datasets...")
+    train_dataset = MWEDataset("train_BIGO.csv", tokenizer)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size)
+
+    val_dataset = MWEDataset("val_BIGO.csv", tokenizer)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size)
+
+    test_dataset = MWEDataset("test_BIGO.csv", tokenizer)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size)
+
+    model = CamembertMWE(4, camembert_model, device)
+
+    for param in model.bert.base_model.parameters():
+        param.requires_grad = False
+
+    model.to(device)
+
+    optimizer = AdamW(model.parameters(), lr=learning_rate)
+    loss = CrossEntropyLoss(reduction='none')
+
+    train_losses, val_losses = train(model, val_loader, val_loader, optimizer, loss, epochs, device)
+
+    f1_scores = evaluate(model, test_loader, device)
+    
+    with open("results.txt", 'a') as f:
+        f.write("Camembert MWE\n")
+        f.write("Test F1 scores : " + str(f1_scores) + "\n")
+
+    plt.plot(train_losses)
+    plt.plot(val_losses)
+    plt.legend(["Train loss", "Val loss"])
+    plt.savefig("camembert_mwe_training.png")

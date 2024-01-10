@@ -1,23 +1,17 @@
-from transformers import DistilBertTokenizer, DistilBertModel
 import torch
-from torch.utils.data import Dataset, DataLoader
-import pandas as pd
 
-tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
-distilbert_model = DistilBertModel.from_pretrained('distilbert-base-uncased')
-
-class DistilBertForMWE(torch.nn.Module):
-    def __init__(self, num_labels):  
+class CamembertMWE(torch.nn.Module):
+    def __init__(self, num_labels, model, device):  
         super().__init__()
-        self.distilbert = distilbert_model
-
-        self.classifier = torch.nn.Linear(distilbert_model.config.dim,num_labels )
+        self.bert = model
+        self.device = device
+        self.classifier = torch.nn.Linear(768, num_labels)
 
     def forward(self, input_ids, attention_mask=None):
-        distilbert_output = self.distilbert(input_ids, attention_mask=attention_mask)
-        hidden_state = distilbert_output[0]  # (batch_size, sequence_length, hidden_size)
-        pooled_output = hidden_state[:, 0]   
-        logits = self.classifier(pooled_output)
-        return logits
-    
-model = DistilBertForMWE(num_labels=2)
+        bert_output = self.bert(input_ids, attention_mask=attention_mask)
+        hidden_state = bert_output[0]  
+        pred = torch.zeros(hidden_state.shape[0], 400, 4).to(self.device)
+        for i in range(hidden_state.shape[0]) :
+            pooled_output = hidden_state[i]
+            pred[i] = self.classifier(pooled_output)
+        return pred
