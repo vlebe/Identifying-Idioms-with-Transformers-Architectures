@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from dataset import MWEDataset
 from transformer import CamembertMWE
-from transformers import CamembertTokenizer, CamembertModel
+from transformers import CamembertTokenizer, CamembertModel, DistilBertTokenizer, DistilBertModel
 from torch.nn import CrossEntropyLoss
 from tqdm import tqdm
 from sklearn.metrics import f1_score
@@ -14,7 +14,7 @@ def train(model, train_loader, val_loader, optimizer, loss, epochs, device):
     train_losses = []
     val_losses = []
 
-    print("Training...")
+    print(f"Training on {device}...")
     for epoch in range(epochs):
         model.train()
         total_loss = 0
@@ -24,10 +24,7 @@ def train(model, train_loader, val_loader, optimizer, loss, epochs, device):
             attention_mask = attention_mask.to(device)
             labels = labels.to(device)
 
-            # Reset gradients
             optimizer.zero_grad()
-
-            # Forward pass
             outputs = model(input_ids=input_ids, attention_mask=attention_mask)
             batch_loss = 0
             for i in range(outputs.shape[0]):
@@ -35,14 +32,15 @@ def train(model, train_loader, val_loader, optimizer, loss, epochs, device):
                 batch_loss += (loss(outputs[i], labels[i]) * mask).mean()
 
             batch_loss /= outputs.shape[0]
-
             total_loss += batch_loss.item()
 
-            # Backward pass and optimization
             batch_loss.backward()
             optimizer.step()
         
         total_loss /= len(train_loader)
+
+        if epoch % 5 == 0:
+            torch.save(model.state_dict(), f"camembert_mwe2_{epoch}.pth")
 
         model.eval()
         with torch.no_grad():
@@ -83,7 +81,7 @@ def train(model, train_loader, val_loader, optimizer, loss, epochs, device):
 
         print("Val scores : ", f1_scores)
 
-    torch.save(model.state_dict(), "camembert_mwe.pth")
+    torch.save(model.state_dict(), "camembert_mwe2.pth")
     return train_losses, val_losses
 
 def calculate_scores_by_class(y_true, y_pred):
@@ -126,8 +124,11 @@ def evaluate(model, data_loader, device):
 if __name__ == '__main__' :
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    tokenizer = CamembertTokenizer.from_pretrained('camembert-base')
-    camembert_model = CamembertModel.from_pretrained('camembert-base')
+    # tokenizer = CamembertTokenizer.from_pretrained('camembert-base')
+    # bert_model = CamembertModel.from_pretrained('camembert-base')
+
+    tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-multilingual-cased')
+    bert_model = DistilBertModel.from_pretrained('distilbert-base-multilingual-cased')
 
     learning_rate = 1e-4
     epochs = 30
@@ -143,7 +144,7 @@ if __name__ == '__main__' :
     test_dataset = MWEDataset("test_BIGO.csv", tokenizer)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
-    model = CamembertMWE(4, camembert_model, device)
+    model = CamembertMWE(4, bert_model, device)
 
     # Freeze Camembert parameters
     for param in model.bert.base_model.parameters():
@@ -152,17 +153,17 @@ if __name__ == '__main__' :
     model.to(device)
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
-    loss = CrossEntropyLoss(reduction='none', weight=torch.tensor([3.2, 98.9, 98.6, 99.2]))
+    loss = CrossEntropyLoss(reduction='none', weight=torch.tensor([3.2, 98.9, 98.6, 99.2]).to(device))
 
     train_losses, val_losses = train(model, train_loader, val_loader, optimizer, loss, epochs, device)
 
     f1_scores = evaluate(model, test_loader, device)
     
-    with open("results.txt", 'a') as f:
+    with open("results2.txt", 'a') as f:
         f.write("Camembert MWE\n")
         f.write("Test F1 scores : " + str(f1_scores) + "\n")
 
     plt.plot(train_losses)
     plt.plot(val_losses)
     plt.legend(["Train loss", "Val loss"])
-    plt.savefig("camembert_mwe_training.png")
+    plt.savefig("camembert_mwe_training2.png")
