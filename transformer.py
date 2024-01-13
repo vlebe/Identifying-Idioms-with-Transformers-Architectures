@@ -1,6 +1,6 @@
 import torch
 
-class CamembertMWE(torch.nn.Module):
+class BertMWE(torch.nn.Module):
     def __init__(self, num_labels, model, device):  
         super().__init__()
         self.bert = model
