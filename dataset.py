@@ -4,8 +4,7 @@ from torch.utils.data import Dataset
 from transformers import DistilBertTokenizer, DistilBertModel
 import ast
 import numpy as np
-from vocab import Vocab
-
+from tqdm import tqdm
 class MWEDataset(Dataset):
     def __init__(self, csv_file_path, tokenizer, embedding_model):
         self.df = pd.read_csv(csv_file_path, sep="\t", 
@@ -14,31 +13,55 @@ class MWEDataset(Dataset):
                                           'labels': ast.literal_eval})
         self.tokenizer = tokenizer
         self.embedding_model = embedding_model
-        self.vocab = Vocab(csv_file_path)
         self.embeddings_tensor = self.create_embeddings(self.df, tokenizer, embedding_model)
 
     @staticmethod
     def create_embeddings(df : pd.DataFrame, tokenizer, embedding_model): 
         def mapping_tokens(tokens : list[str]): 
-            list_mapping, counter, is_dash, is_parenthesis = [0], 0, False, False
+            list_mapping, counter, is_dash, is_parenthesis, is_digits, count_dash = [0], 0, False, False, False, 0
             for idx, token in enumerate(tokens):
                 if not(token.startswith("##")):
-                    if "'" in token: 
+                    if token == '[UNK]' :
+                        token = "'"
+                    elif token == "hui" and tokens[idx-1] == "'":
+                        continue
+                    
+                    elif "'" in token: 
                         is_dash = False
-                    elif is_dash: 
-                        if token in ("ce"): 
+                    elif is_dash:
+                        if token in ("ce", "on"): 
                             counter += 1
                             is_dash = False
                         elif token == "-":
+                            count_dash += 1
                             is_dash=True
                         else:
                             is_dash=False
+                            count_dash = 0
+
+                        if count_dash == 2 :
+                            counter +=1 
+                            is_dash = False
+                            count_dash = 0
+                            list_mapping[-1] += 1
+
                     elif "-" in token:
-                        is_dash = True
+                        if idx == 0 :
+                            counter += 1
+                        elif tokens[idx-1] == "a":
+                            counter += 1
+                            is_dash = True
+                            count_dash += 1
+                        else : 
+                            is_dash = True
+                            count_dash += 1
+                            
                     elif token in ("(", ")"): 
                         if token == "(": 
                             token_after = tokens[idx+1]
                             if len(token_after) >= 2: 
+                                counter += 1
+                            elif token_after.isdigit():
                                 counter += 1
                             else : 
                                 is_parenthesis = True
@@ -49,6 +72,22 @@ class MWEDataset(Dataset):
                             is_parenthesis = False
                     elif is_parenthesis: 
                         is_parenthesis=False
+
+                    elif token.isdigit():
+                        if not is_digits:
+                            counter += 1
+                            is_digits = True
+                    elif is_digits:
+                        if not (token == "," and tokens[idx+1].isdigit()) :
+                            is_digits = False
+                            counter += 1
+
+                    elif token == '.' :
+                        if tokens[idx-1] in ("etc", "cf", '.'):
+                            continue
+                        else :
+                            counter += 1
+
                     else :
                         counter += 1
                 list_mapping.append(counter)
@@ -106,15 +145,19 @@ class MWEDataset(Dataset):
 
             return embeddings_final
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cpu")
         
-        for idx, row in df.iterrows(): 
+        for idx, row in tqdm(df.iterrows()): 
             tokens = row.token_list
 
             sentence = " ".join(tokens)
             tokens_bert = tokenizer.tokenize(sentence)
 
             list_mapping = mapping_tokens(tokens_bert)
+
+            if len(row.labels) != max(list_mapping):
+                continue
 
             encoding = tokenizer.encode_plus(tokens, add_special_tokens=True, 
                                         max_length=400, padding='max_length', 
@@ -129,7 +172,7 @@ class MWEDataset(Dataset):
             else : 
                 embeddings_tensor = torch.cat((embeddings_tensor, embedding.detach().to(device)))
 
-            print(embeddings_tensor.shape)
+            # print(embeddings_tensor.shape)
 
         return mean_embed(list_mapping, embeddings_tensor)
 
@@ -157,7 +200,6 @@ class MWEDataset(Dataset):
         # tokens = torch.nn.functional.pad(torch.tensor(tokens), (0, 400 - len(tokens)), value=-1)
 
         return embedding, labels
-        return input_ids, attention_mask, tokens, indices, labelsÒ
     
 def main(): 
     tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-multilingual-cased')
@@ -165,6 +207,7 @@ def main():
 
     print(f"Loading dataset")
     train_dataset = MWEDataset("train_BIGO.csv", tokenizer, bert_model)
+    torch.save(train_dataset.embeddings_tensor, "embeddings_tensor.pt")
 
 if __name__=="__main__": 
     main()
