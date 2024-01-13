@@ -19,21 +19,119 @@ class MWEDataset(Dataset):
 
     @staticmethod
     def create_embeddings(df : pd.DataFrame, tokenizer, embedding_model): 
-        embeddings_tensor = torch.zeros(len(df), 400, 768)
+        def mapping_tokens(tokens : list[str]): 
+            list_mapping, counter, is_dash, is_parenthesis = [0], 0, False, False
+            for idx, token in enumerate(tokens):
+                if not(token.startswith("##")):
+                    if "'" in token: 
+                        is_dash = False
+                    elif is_dash: 
+                        if token in ("ce"): 
+                            counter += 1
+                            is_dash = False
+                        elif token == "-":
+                            is_dash=True
+                        else:
+                            is_dash=False
+                    elif "-" in token:
+                        is_dash = True
+                    elif token in ("(", ")"): 
+                        if token == "(": 
+                            token_after = tokens[idx+1]
+                            if len(token_after) >= 2: 
+                                counter += 1
+                            else : 
+                                is_parenthesis = True
+                        else: 
+                            token_before = tokens[idx-1]
+                            if len(token_before) >= 2: 
+                                counter += 1
+                            is_parenthesis = False
+                    elif is_parenthesis: 
+                        is_parenthesis=False
+                    else :
+                        counter += 1
+                list_mapping.append(counter)
+            return list_mapping
 
+        def mean_embed(list_mapping : list[int], embeddings : torch.Tensor):
+            current_map, list_current_embed, embeddings_final = None, None, None
+            for idx, mapping in enumerate(list_mapping): 
+
+                if idx==0: 
+                    current_map = mapping
+                    list_current_embed = [embeddings[idx, :, :]]
+
+                elif idx==len(list_mapping)-1:
+                    if current_map == mapping:
+                        list_current_embed.append(embeddings[idx, :, :])
+                    else: 
+                        mean_embeddings = None
+                        for idx_embed, embed in enumerate(list_current_embed): 
+                                if idx_embed==0: 
+                                    mean_embeddings = embed
+                                else : 
+                                    mean_embeddings += embed
+                        new_line = mean_embeddings/len(list_current_embed)
+                        embeddings_final = torch.cat((embeddings_final, new_line.detach().unsqueeze(0).to(device)), dim=0)
+                        list_current_embed = [embeddings[idx, :, :]]
+                    mean_embeddings = None
+                    for idx_embed, embed in enumerate(list_current_embed): 
+                            if idx_embed==0: 
+                                mean_embeddings = embed
+                            else : 
+                                mean_embeddings += embed 
+                    new_line = mean_embeddings/len(list_current_embed)
+                    embeddings_final = torch.cat((embeddings_final, new_line.detach().unsqueeze(0).to(device), embeddings[idx+1:,:].to(device)), dim=0)
+
+                elif current_map != mapping:
+                    mean_embeddings = None
+                    for idx_embed, embed in enumerate(list_current_embed): 
+                            if idx_embed==0: 
+                                mean_embeddings = embed
+                            else : 
+                                mean_embeddings += embed
+                    if embeddings_final is not None:
+                        new_line = mean_embeddings/len(list_current_embed)
+                        embeddings_final = torch.cat((embeddings_final, new_line.detach().unsqueeze(0).to(device)), dim=0)
+                    else: 
+                        new_line = mean_embeddings/len(list_current_embed)
+                        embeddings_final = torch.tensor(new_line.detach().to(device)).unsqueeze(0)
+
+                    list_current_embed = [embeddings[idx, :, :]]
+                    current_map = mapping
+
+                else : 
+                    list_current_embed.append(embeddings[idx, :, :])
+
+            return embeddings_final
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
         for idx, row in df.iterrows(): 
             tokens = row.token_list
+
+            sentence = " ".join(tokens)
+            tokens_bert = tokenizer.tokenize(sentence)
+
+            list_mapping = mapping_tokens(tokens_bert)
+
             encoding = tokenizer.encode_plus(tokens, add_special_tokens=True, 
                                         max_length=400, padding='max_length', 
                                         return_attention_mask=True, 
                                         return_tensors='pt', truncation=True)
-            input_ids, attention_mask = encoding['input_ids'].squeeze(0), encoding['attention_mask'].squeeze(0)
+            input_ids, attention_mask = encoding['input_ids'], encoding['attention_mask']
 
             embedding = embedding_model(input_ids=input_ids, attention_mask=attention_mask)[0]
             
-            embeddings_tensor[idx, :, :] = embedding.detach()
+            if idx==0: 
+                embeddings_tensor = embedding.detach().to(device)
+            else : 
+                embeddings_tensor = torch.cat((embeddings_tensor, embedding.detach().to(device)))
 
-            raise KeyboardInterrupt
+            print(embeddings_tensor.shape)
+
+        return mean_embed(list_mapping, embeddings_tensor)
 
     def __len__(self):
         return len(self.df)
