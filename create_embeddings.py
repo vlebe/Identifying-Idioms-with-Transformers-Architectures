@@ -167,17 +167,17 @@ class MWEDataset(Dataset):
             input_ids, attention_mask = encoding['input_ids'], encoding['attention_mask']
 
             embedding = embedding_model(input_ids=input_ids, attention_mask=attention_mask)[0]
+            new_line = torch.full((1, 1, 768), float(idx))
 
-            index_list.append(idx)
-            
+            # Concatenate along the second dimension (dimension 1)
+            embedding = torch.cat((embedding, new_line), dim=1) 
+
             if idx%2000 == 0: 
                 if idx > 1 :
                     torch.save(embeddings_tensor, f"embeddings_tensor_test_IGO_{idx}.pt")
                 embeddings_tensor = embedding.detach().to(device)
             else : 
                 embeddings_tensor = torch.cat((embeddings_tensor, embedding.detach().to(device)))
-
-        torch.save(torch.tensor(index_list), "index_list_test.pt")
 
         return mean_embed(list_mapping, embeddings_tensor)
 

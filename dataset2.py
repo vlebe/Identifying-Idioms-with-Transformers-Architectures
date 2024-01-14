@@ -134,6 +134,16 @@ class MWEDatasetEmbedding(Dataset):
 
             index_list.append(idx)
 
+            if idx%2000 == 0: 
+                if idx > 1 :
+                    torch.save(index_list2, f"input_id_{idx}.pt")
+                index_list2 = torch.tensor([idx]).unsqueeze(0)
+            else : 
+                index_list2 = torch.cat((index_list2, torch.tensor([idx]).unsqueeze(0)), dim=0)
+
+        torch.save(index_list2, f"input_id_fin.pt")
+        torch.save(torch.tensor(index_list), "index_list_test.pt")
+
         return df.iloc[index_list].labels
     
     def __len__(self):
