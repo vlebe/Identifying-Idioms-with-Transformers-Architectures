@@ -112,12 +112,42 @@ def evaluate_baseline(expression_test : list, expression_train : list) :
     return score / len(expression_test)
 
 if __name__ == "__main__" :
+    import pandas as pd
+    import ast
+    import numpy as np
+    from sklearn.metrics import f1_score
+    from tqdm import tqdm
+
     train_sentences = read_cupt("Dataset/FR/train.cupt")
     test_sentences = read_cupt("Dataset/FR/test.cupt")
 
     baseline_model = BaselineModel()
     baseline_model.train(train_sentences)
 
-    test = model(test_sentences)
-    score = evaluate_baseline(train, test)
-    print("Score : ", score)
+    test = pd.read_csv("test_IGO.csv", sep="\t", converters={"token_list": ast.literal_eval,
+                                                         "lemmas": ast.literal_eval,
+                                                         'labels': ast.literal_eval})
+    
+    def calculate_scores_by_class(y_true, y_pred):
+        # Filter out cases where y_true is -100
+        valid_indices = [i for i, label in enumerate(y_true) if label != -100]
+        y_true_valid = np.array([y_true[i] for i in valid_indices])
+        y_pred_valid = np.array([y_pred[i] for i in valid_indices])
+
+        # Calculate F1 score by class
+        f1_scores = f1_score(y_true_valid, y_pred_valid, average=None, labels=np.unique(y_true_valid))
+
+        return f1_scores
+
+    y_pred = []
+    y_true = []
+    for i, sentence in tqdm(enumerate(test_sentences)) :
+        y_predi = baseline_model.predict(sentence)
+        y_true_ = test["labels"][i]
+
+        y_pred.extend(y_predi)
+        y_true.extend(y_true_)
+    
+    f_scores = calculate_scores_by_class(y_true, y_pred)
+    
+    print(f_scores)
