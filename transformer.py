@@ -36,3 +36,33 @@ class BertMWE(torch.nn.Module):
         _, predicted = torch.max(output, dim=2)
 
         return predicted
+    
+class BertMWEEmbedding(torch.nn.Module):
+    def __init__(self, num_labels, device):  
+        super().__init__()
+        self.initial_proba = torch.tensor(get_initial_proba("train_IGO.csv", igo=True))
+        self.transition_proba = torch.tensor(get_transition_proba("train_IGO.csv", igo=True))
+        self.device = device
+        self.classifier = torch.nn.Sequential(
+            torch.nn.Linear(768, 384),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(0.3),
+            torch.nn.Linear(384, num_labels)
+        )
+
+    def forward(self, emb_input):
+        return self.classifier(emb_input)
+    
+    def predict(self, emb_input, viterbi_bool=False):
+        output = self.classifier(emb_input)
+        
+        if viterbi_bool:
+            output = output.transpose(1, 2)
+            output = F.softmax(output, dim=1).cpu()
+            viterbi_preds = viterbi(output, self.initial_proba, self.transition_proba)
+            
+            return viterbi_preds.long()
+        
+        _, predicted = torch.max(output, dim=2)
+
+        return predicted

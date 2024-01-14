@@ -147,21 +147,23 @@ class MWEDatasetEmbedding(Dataset):
         return df.iloc[index_list].labels
     
     def __len__(self):
-        return len(self.df)
+        return len(self.embeddings)
 
     def __getitem__(self, idx):
         emb = self.embeddings[idx]
-        labels = torch.tensor(self.labels.iloc[idx]).long()
+        lab_index = emb[512][0].item()
+        labels = torch.tensor(self.labels.iloc[lab_index]).long()
+        # labels = torch.tensor(self.labels.iloc[idx]).long()
         labels = torch.cat((torch.tensor([-100]), labels, torch.tensor([-100])))
         
         # Pad labels to size 128
         labels = torch.nn.functional.pad(labels, (0, 512 - labels.size(0)), value=-100)
         
-        return emb, labels
+        return emb[:513, :], labels
     
 if __name__ == "__main__" :
     from transformers import DistilBertTokenizer
 
-    dataset = MWEDatasetEmbedding('train_BIGO.csv', DistilBertTokenizer.from_pretrained('distilbert-base-multilingual-cased'), "embeddings/test/embeddings_tensor__test_BIGO.pt")
+    dataset = MWEDatasetEmbedding('test_BIGO.csv', DistilBertTokenizer.from_pretrained('distilbert-base-multilingual-cased'), "embeddings/test/embeddings_tensor_test_IGO_2000.pt")
     print(len(dataset.labels))
     print(dataset[0][0].shape, dataset[0][1].shape)
