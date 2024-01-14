@@ -1,9 +1,9 @@
 import torch
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
-from dataset import MWEDataset
+from dataset2 import MWEDataset
 from transformer import BertMWE
-from transformers import CamembertTokenizer, CamembertModel, DistilBertTokenizer, DistilBertModel
+from transformers import DistilBertTokenizer, DistilBertModel
 from torch.nn import CrossEntropyLoss
 from tqdm import tqdm
 from eval import evaluate, calculate_scores_by_class
@@ -107,16 +107,16 @@ def main(args):
     bert_model = DistilBertModel.from_pretrained('distilbert-base-multilingual-cased')
 
     print("Loading datasets...")
-    train_dataset = MWEDataset("train_BIGO.csv", tokenizer)
+    train_dataset = MWEDataset(f"train_{args.output_encoding}.csv", tokenizer)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size)
 
-    val_dataset = MWEDataset("val_BIGO.csv", tokenizer)
+    val_dataset = MWEDataset(f"val_{args.output_encoding}.csv", tokenizer)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size)
 
-    test_dataset = MWEDataset("test_BIGO.csv", tokenizer)
+    test_dataset = MWEDataset(f"test_{args.output_encoding}.csv", tokenizer)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size)
 
-    model = BertMWE(4, bert_model, device)
+    model = BertMWE(args.n_classes, bert_model, device)
 
     # Freeze Camembert parameters
     for param in model.bert.base_model.parameters():
@@ -126,11 +126,16 @@ def main(args):
 
     optimizer = AdamW(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.2)
-    loss = CrossEntropyLoss(reduction='none', weight=torch.tensor([3.2, 98.9, 98.6, 99.2]).to(device))
+
+    # IOG (3.202401664041446, 97.56650403112943, 99.23109430482913)
+    # BIGO (2.1647543052400664, 98.92802365281834, 98.61239387711518, 99.22285181764475)
+    loss = CrossEntropyLoss(reduction='none', weight=torch.tensor([3.2, 98.9, 98.6]).to(device))
     early_stopping = EarlyStopping(path=save_dir + "best_weights.pth")
 
     train_losses, val_losses = train(model, train_loader, val_loader, optimizer, loss, args.epochs, early_stopping, device, save_dir, scheduler)
 
+    model.load_state_dict(torch.load(save_dir + "best_weights.pth"))
+    model.to(device)
     f1_scores = evaluate(model, test_loader, device)
 
     print('Test F1 scores : ', f1_scores)
@@ -142,13 +147,15 @@ def main(args):
     plt.plot(train_losses)
     plt.plot(val_losses)
     plt.legend(["Train loss", "Val loss"])
-    plt.savefig(save_dir + "camembert_mwe_training.png")
+    plt.savefig(save_dir + "bert_mwe_training.png")
 
 if __name__ == '__main__' :
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=30)
     parser.add_argument('--batch_size', type=int, default=16)
-    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--save-dir', type=str, default="training_results")
+    parser.add_argument('--n_classes', type=int, default=4)
+    parser.add_argument("-o", '--output-encoding', type=str, default="BIGO")
 
     main(parser.parse_args())

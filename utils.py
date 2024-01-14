@@ -31,7 +31,7 @@ def extract_numbers(sentence):
     return numbers
 
 class EarlyStopping:
-    def __init__(self, patience=5, delta=0.00001, path='best_score.pt'):
+    def __init__(self, patience=10, delta=0.00001, path='best_score.pt'):
         """
         Args:
             patience (int): How long to wait after last time validation loss improved.

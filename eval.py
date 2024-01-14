@@ -1,6 +1,11 @@
 import numpy as np
 from sklearn.metrics import f1_score
 import torch
+from transformers import DistilBertTokenizer, DistilBertModel 
+from dataset2 import MWEDataset  
+from torch.utils.data import DataLoader
+from transformer import BertMWE
+from tqdm import tqdm
 
 def calculate_scores_by_class(y_true, y_pred):
     # Filter out cases where y_true is -100
@@ -13,21 +18,20 @@ def calculate_scores_by_class(y_true, y_pred):
 
     return f1_scores
 
-def evaluate(model, data_loader, device):
+def evaluate(model, data_loader, device, viterbi=False):
     model.eval()
     y_true = []
     y_pred = []
 
     with torch.no_grad():
-        for batch in data_loader:
+        for batch in tqdm(data_loader):
             input_ids, attention_mask, labels = batch
             input_ids = input_ids.to(device)
             attention_mask = attention_mask.to(device)
             labels = labels.to(device)
 
             # Forward pass
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
-            _, predicted = torch.max(outputs, dim=2)
+            predicted = model.predict(input_ids=input_ids, attention_mask=attention_mask, viterbi_bool=viterbi)
 
             y_true.extend(labels.tolist())
             y_pred.extend(predicted.tolist())
@@ -38,3 +42,18 @@ def evaluate(model, data_loader, device):
     f1_scores = calculate_scores_by_class(y_true, y_pred)
 
     return f1_scores
+
+if __name__ == "__main__" :
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-multilingual-cased')
+    bert_model = DistilBertModel.from_pretrained('distilbert-base-multilingual-cased')
+
+    test_dataset = MWEDataset("test_IGO.csv", tokenizer)
+    test_loader = DataLoader(test_dataset, batch_size=16)
+
+    model = BertMWE(3, bert_model, device)
+    model.load_state_dict(torch.load("training_results/exp4/bert_mwe.pth"))
+    model.to(device)
+
+    print(evaluate(model, test_loader, device, viterbi=True))
