@@ -71,33 +71,59 @@ def get_transition_proba(csv_file_path, igo=False) :
 
     return raw_prob / sommes_lignes[:, np.newaxis]
 
-def viterbi(emission_matrix, initial_proba, transition_proba) :
-    shape = emission_matrix.shape
+def viterbi(emission_matrices, initial_proba, transition_proba):
+    B, N, T = emission_matrices.shape
 
-    delta = torch.zeros(shape)
-    psi = torch.zeros(shape)
+    delta = torch.zeros(B, N, T)
+    psi = torch.zeros(B, N, T)
 
     # Initialisation
-    delta[:, 0] = emission_matrix[:, 0] * initial_proba
-
-    print("Delta1 : ", delta)
+    delta[:, :, 0] = emission_matrices[:, :, 0] * initial_proba.view(1, -1)
 
     # Calcul des différentes valeurs de delta
-    for t in range(0, shape[1] - 1) :
-        for j in range(shape[0]) :
-            liste = [ delta[i, t] * transition_proba[i, j] * emission_matrix[j, t + 1] for i in range(shape[0])]
-            delta[j, t + 1], psi[j, t + 1] = max(liste), torch.argmax(torch.tensor(liste))
+    for t in range(1, T):
+        for j in range(N):
+            liste = [
+                delta[b, i, t-1] * transition_proba[i, j] * emission_matrices[b, j, t]
+                for b in range(B)
+                for i in range(N)
+            ]
+            liste = torch.tensor(liste).view(B, N)
+            delta[:, j, t], psi[:, j, t] = liste.max(dim=1)
 
-    print("Delta2 : ", delta)
+    # Détermination du meilleur chemin
+    z_T = delta[:, :, T - 1].argmax(dim=1)
+    z = torch.zeros(B, T, dtype=torch.long)
+    z[:, T - 1] = z_T
 
-    # Détermination du meilleur chemin 
-    z_T = torch.argmax(torch.tensor([delta[i, shape[1]-1] for i in range(shape[0])])).long()
-    z = torch.zeros(shape[1]).long()
-    z[shape[1]-1] = z_T
-    for t in range(shape[1]-2, 0, -1) :
-        z[t] = psi[z[t+1], t+1]
-    
+    for t in range(T - 2, -1, -1):
+        z[:, t] = psi[torch.arange(B), z[:, t + 1], t + 1]
+
     return z
+
+# def viterbi(emission_matrix, initial_proba, transition_proba) :
+#     shape = emission_matrix.shape
+
+#     delta = torch.zeros(shape)
+#     psi = torch.zeros(shape)
+
+#     # Initialisation
+#     delta[:, 0] = emission_matrix[:, 0] * initial_proba
+
+#     # Calcul des différentes valeurs de delta
+#     for t in range(0, shape[1] - 1) :
+#         for j in range(shape[0]) :
+#             liste = [ delta[i, t] * transition_proba[i, j] * emission_matrix[j, t + 1] for i in range(shape[0])]
+#             delta[j, t + 1], psi[j, t + 1] = max(liste), torch.argmax(torch.tensor(liste))
+
+#     # Détermination du meilleur chemin 
+#     z_T = torch.argmax(torch.tensor([delta[i, shape[1]-1] for i in range(shape[0])])).long()
+#     z = torch.zeros(shape[1]).long()
+#     z[shape[1]-1] = z_T
+#     for t in range(shape[1]-2, 0, -1) :
+#         z[t] = psi[z[t+1], t+1]
+    
+#     return z
 
 if __name__ == "__main__" :
     # # O B I G
