@@ -74,6 +74,7 @@ class BaselineModel():
         for word in words_B: 
             words_I.remove(word)
 
+        # On ajoute un label pour les mots B et I 
         for idx_word in labels: 
             lemma = sentence[idx_word]["lemma"]
             if lemma in words_B: 
@@ -81,24 +82,32 @@ class BaselineModel():
             elif lemma in words_I: 
                 labels[idx_word] = 2
 
+        # On complète les labels pour les mots G ou O
         for idx_word in range(len(sentence)):
+            label = labels[idx_word]
+
+            if label is not None: 
+                continue
+
+            # Début de la phrase est forcément O si ce n'est pas un B ou I
             if idx_word == 0: 
-                if labels[idx_word] is None:
-                    labels[idx_word] = 0
+                labels[idx_word] = 0
                 continue
             
+            # Fin de la phrase est forcément O si ce n'est pas un B ou I
             if idx_word == (len(sentence))-1: 
-                if labels[idx_word] is None:
-                    labels[idx_word] = 0
+                labels[idx_word] = 0
                 continue 
-
+            
+            # Si le mot à gauche est B ou le mot à droite est I alors le label est G
             if labels[idx_word-1] == 1 or labels[idx_word+1] == 2:
                 labels[idx_word] = 3
+            # Sinon le label est O
             else: 
                 labels[idx_word] = 0
 
         list_labels = list(labels.values())
-        return list_labels
+        # return list_labels
         
         list_labels_IGO_1 = [1 if x == 2 else x for x in list_labels]
         return [2 if x == 3 else x for x in list_labels_IGO_1]
@@ -118,8 +127,8 @@ if __name__ == "__main__" :
     from sklearn.metrics import f1_score
     from tqdm import tqdm
 
-    train_sentences = read_cupt("Dataset/FR/train.cupt")
-    test_sentences = read_cupt("Dataset/FR/test.cupt")
+    train_sentences = read_cupt("Dataset/train.cupt")
+    test_sentences = read_cupt("Dataset/test.cupt")
 
     baseline_model = BaselineModel()
     baseline_model.train(train_sentences)
