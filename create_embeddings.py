@@ -148,7 +148,6 @@ class MWEDataset(Dataset):
         # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         device = torch.device("cpu")
         
-        index_list = []
         for idx, row in tqdm(df.iterrows()): 
             tokens = row.token_list
 
@@ -174,7 +173,7 @@ class MWEDataset(Dataset):
 
             if idx%2000 == 0: 
                 if idx > 1 :
-                    torch.save(embeddings_tensor, f"embeddings_tensor_val_{idx}.pt")
+                    torch.save(embeddings_tensor, f"embeddings_tensor_test_{idx}.pt")
                 embeddings_tensor = embedding.detach().to(device)
             else : 
                 embeddings_tensor = torch.cat((embeddings_tensor, embedding.detach().to(device)))
@@ -211,8 +210,8 @@ def main():
     bert_model = DistilBertModel.from_pretrained('distilbert-base-multilingual-cased')
 
     print(f"Loading dataset")
-    train_dataset = MWEDataset("val_BIGO.csv", tokenizer, bert_model)
-    torch.save(train_dataset.embeddings_tensor, "embeddings_tensor_val.pt")
+    train_dataset = MWEDataset("test_BIGO.csv", tokenizer, bert_model)
+    torch.save(train_dataset.embeddings_tensor, "embeddings_tensor_test.pt")
 
 if __name__=="__main__": 
     main()

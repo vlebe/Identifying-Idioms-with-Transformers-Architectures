@@ -151,7 +151,7 @@ class MWEDatasetEmbedding(Dataset):
 
     def __getitem__(self, idx):
         emb = self.embeddings[idx]
-        lab_index = emb[512][0].item()
+        lab_index = emb[512][0].int().item()
         labels = torch.tensor(self.labels.iloc[lab_index]).long()
         # labels = torch.tensor(self.labels.iloc[idx]).long()
         labels = torch.cat((torch.tensor([-100]), labels, torch.tensor([-100])))
@@ -159,7 +159,7 @@ class MWEDatasetEmbedding(Dataset):
         # Pad labels to size 128
         labels = torch.nn.functional.pad(labels, (0, 512 - labels.size(0)), value=-100)
         
-        return emb[:513, :], labels
+        return emb[:512, :], labels
     
 if __name__ == "__main__" :
     from transformers import DistilBertTokenizer
