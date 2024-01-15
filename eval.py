@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.metrics import f1_score
 import torch
 from transformers import DistilBertTokenizer, DistilBertModel 
-from dataset2 import MWEDataset  
+from dataset import MWEDatasetEmbedding, MWEDataset  
 from torch.utils.data import DataLoader
 from transformer import BertMWE
 from tqdm import tqdm
@@ -32,6 +32,30 @@ def evaluate(model, data_loader, device, viterbi=False):
 
             # Forward pass
             predicted = model.predict(input_ids=input_ids, attention_mask=attention_mask, viterbi_bool=viterbi)
+
+            y_true.extend(labels.tolist())
+            y_pred.extend(predicted.tolist())
+
+    y_true = np.array(y_true).flatten()
+    y_pred = np.array(y_pred).flatten()
+
+    f1_scores = calculate_scores_by_class(y_true, y_pred)
+
+    return f1_scores
+
+def evaluate_emb(model, data_loader, device, viterbi=False):
+    model.eval()
+    y_true = []
+    y_pred = []
+
+    with torch.no_grad():
+        for batch in tqdm(data_loader):
+            emb, labels = batch
+            emb = emb.to(device)
+            labels = labels.to(device)
+
+            # Forward pass
+            predicted = model.predict(emb, viterbi_bool=viterbi)
 
             y_true.extend(labels.tolist())
             y_pred.extend(predicted.tolist())

@@ -22,13 +22,12 @@ def train(model, train_loader, val_loader, optimizer, loss, epochs, early_stoppi
         model.train()
         total_loss = 0
         for batch in tqdm(train_loader):
-            input_ids, attention_mask, labels = batch
-            input_ids = input_ids.to(device)
-            attention_mask = attention_mask.to(device)
+            emb, labels = batch
+            emb = emb.to(device)
             labels = labels.to(device)
 
             optimizer.zero_grad()
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+            outputs = model(emb)
             batch_loss = 0
             for i in range(outputs.shape[0]):
                 mask = (labels[i] != -100).float().to(device)
@@ -48,13 +47,12 @@ def train(model, train_loader, val_loader, optimizer, loss, epochs, early_stoppi
             y_true = []
             y_pred = []
             for batch in val_loader :
-                input_ids, attention_mask, labels = batch
-                input_ids = input_ids.to(device)
-                attention_mask = attention_mask.to(device)
+                emb, labels = batch
+                emb = emb.to(device)
                 labels = labels.to(device)
 
                 # Forward pass
-                outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+                outputs = model(emb)
 
                 _, predicted = torch.max(outputs, dim=2)
                 y_true.extend(labels.tolist())
@@ -131,13 +129,13 @@ def main(args):
     model.load_state_dict(torch.load(save_dir + "best_weights.pth"))
     model.to(device)
 
-    # f1_scores = evaluate(model, test_loader, device)
+    f1_scores = evaluate(model, test_loader, device)
 
-    # print('Test F1 scores : ', f1_scores)
+    print('Test F1 scores : ', f1_scores)
     
-    # with open(save_dir + "results.txt", 'a') as f:
-    #     f.write("Bert MWE\n")
-    #     f.write("Test F1 scores : " + str(f1_scores) + "\n")
+    with open(save_dir + "results.txt", 'a') as f:
+        f.write("Bert MWE\n")
+        f.write("Test F1 scores : " + str(f1_scores) + "\n")
 
     plt.plot(train_losses)
     plt.plot(val_losses)
