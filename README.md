@@ -76,8 +76,3 @@ Subsequently, we attempted to use the averaging method of embeddings to decrease
 In conclusion, our project focuses on identifying idiomatic expressions in French using transformer architectures. We compare the performance of different output encodings and explore the integration of the Viterbi algorithm to optimize output sequences. Our experiments show promising results, especially with the use of Viterbi, indicating the potential for improved accuracy in identifying idiomatic expressions.
 
 Moving forward, we plan to conduct further experiments to refine our model and explore additional techniques to enhance its performance. Our ultimate goal is to develop a robust system capable of accurately identifying idiomatic expressions in French, which could have various applications in natural language understanding and processing.
-
-## References
-
-[1] Example Reference
-
